@@ -53,6 +53,34 @@ actor {
     return ?key;
   };
 
+  // Verify if a key is valid for a specific developer and project
+  public query func verifyKey(devPrincipal: Principal, project: Project, key: Key) : async Bool {
+    let devId = Principal.toText(devPrincipal);
+    
+    switch (devKeys.get(devId)) {
+      case (?projectMap) {
+        switch (projectMap.get(project)) {
+          case (?storedKey) { storedKey == key };
+          case null { false };
+        };
+      };
+      case null { false };
+    };
+  };
+
+  // Get all keys for a developer
+  public query func getDeveloperKeys(devPrincipal: Principal) : async [(Project, Key)] {
+    let devId = Principal.toText(devPrincipal);
+    
+    switch (devKeys.get(devId)) {
+      case (?projectMap) {
+        let entries = Iter.toArray(projectMap.entries());
+        Array.map<(Project, Key), (Project, Key)>(entries, func(entry) { entry });
+      };
+      case null { [] };
+    };
+  };
+
     // Analyze message content using LLM
 	  func isHarassment(content: Text): async Bool {
 	  let promptText = "Does the following message contain harassment? Answer only with YES or NO.\n\nMessage:\n" # content;
