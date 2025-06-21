@@ -1,0 +1,26 @@
+{
+  "canisters": {
+    "EcoKind_backend": {
+      "main": "src/EcoKind_backend/main.mo",
+      "type": "motoko"
+    },
+    "EcoKind_frontend": {
+      "dependencies": [
+        "EcoKind_backend"
+      ],
+      "source": [
+        "src/EcoKind_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "EcoKind_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": "mops sources"
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
