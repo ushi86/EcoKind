@@ -7,13 +7,15 @@ interface ChatFunctionFormProps {
   parameters: string[];
   onSubmit: (functionId: string, params: Record<string, string>) => void;
   isLoading: boolean;
+  disabled?: boolean;
 }
 
 const ChatFunctionForm: React.FC<ChatFunctionFormProps> = ({
   functionId,
   parameters,
   onSubmit,
-  isLoading
+  isLoading,
+  disabled = false
 }) => {
   const [formData, setFormData] = useState<Record<string, string>>({});
 
@@ -76,7 +78,8 @@ const ChatFunctionForm: React.FC<ChatFunctionFormProps> = ({
               onChange={(e) => setFormData({ ...formData, [param]: e.target.value })}
               placeholder={getPlaceholder(param)}
               rows={4}
-              className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 resize-none"
+              disabled={disabled}
+              className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
               required
             />
           ) : (
@@ -85,7 +88,8 @@ const ChatFunctionForm: React.FC<ChatFunctionFormProps> = ({
               value={formData[param] || ''}
               onChange={(e) => setFormData({ ...formData, [param]: e.target.value })}
               placeholder={getPlaceholder(param)}
-              className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200"
+              disabled={disabled}
+              className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               required
             />
           )}
@@ -105,7 +109,7 @@ const ChatFunctionForm: React.FC<ChatFunctionFormProps> = ({
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         type="submit"
-        disabled={isLoading || (parameters.length > 0 && !parameters.every(param => formData[param]?.trim()))}
+        disabled={isLoading || disabled || (parameters.length > 0 && !parameters.every(param => formData[param]?.trim()))}
         className="w-full px-8 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/25"
       >
         <div className="flex items-center justify-center space-x-3">

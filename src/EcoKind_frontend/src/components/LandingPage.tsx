@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Zap, Users, Brain, Eye, Fingerprint, Sparkles, Lock } from 'lucide-react';
+import { Shield, Zap, Users, Brain, Eye, Fingerprint, Sparkles, Lock, AlertCircle } from 'lucide-react';
+import { ConnectWallet, useIdentityKit } from '@nfid/identitykit/react';
 
 interface LandingPageProps {
   onIdentityConnect: (principalId: string) => void;
@@ -20,33 +21,18 @@ const EcoKindLogo = ({ size = 32 }: { size?: number }) => (
 );
 
 const LandingPage: React.FC<LandingPageProps> = ({ onIdentityConnect }) => {
-  const [isConnecting, setIsConnecting] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [error, setError] = useState("");
+  const { identity } = useIdentityKit();
 
-  // ========================================
-  // BACKEND INTEGRATION POINT #1
-  // Replace with actual Internet Identity
-  // ========================================
-  const handleConnectIdentity = async () => {
-    setIsConnecting(true);
-    
-    try {
-      // TODO: Replace with actual Internet Identity integration
-      // const identity = await window.ic.plug.requestConnect();
-      // const principal = identity.principalId;
-      
-      // Mock implementation - replace this
-      setTimeout(() => {
-        const mockPrincipalId = `rdmx6-jaaaa-aaaah-qcaiq-cai`;
-        onIdentityConnect(mockPrincipalId);
-        setIsConnecting(false);
-      }, 2500);
-      
-    } catch (error) {
-      console.error('Identity connection failed:', error);
-      setIsConnecting(false);
+  React.useEffect(() => {
+    if (identity && typeof identity.getPrincipal === 'function') {
+      const principal = identity.getPrincipal();
+      if (principal) {
+        onIdentityConnect(principal.toText());
+      }
     }
-  };
+  }, [identity, onIdentityConnect]);
 
   const features = [
     {
@@ -68,6 +54,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onIdentityConnect }) => {
       icon: <Users className="w-7 h-7" />,
       title: "Community Driven",
       description: "Decentralized approach ensuring privacy and transparency"
+    },
+    {
+      icon: <Fingerprint className="w-7 h-7" />,
+      title: "NFID Integration",
+      description: "Secure Internet Identity authentication via NFID"
+    },
+    {
+      icon: <Lock className="w-7 h-7" />,
+      title: "VetKey Security",
+      description: "Advanced cryptographic authentication system"
     }
   ];
 
@@ -167,31 +163,42 @@ const LandingPage: React.FC<LandingPageProps> = ({ onIdentityConnect }) => {
             transition={{ delay: 0.6, duration: 0.8 }}
             className="mb-16"
           >
-            <button
-              onClick={handleConnectIdentity}
-              disabled={isConnecting}
-              className="group relative px-10 py-5 bg-gradient-to-r from-emerald-500 via-cyan-500 to-purple-500 rounded-2xl text-white font-semibold text-lg hover:from-emerald-600 hover:via-cyan-600 hover:to-purple-600 transition-all duration-500 shadow-2xl hover:shadow-emerald-500/25 disabled:opacity-70 transform hover:scale-105"
-            >
-              <div className="flex items-center space-x-3">
-                {isConnecting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>
-                    <span>Connecting to Internet Identity...</span>
-                  </>
-                ) : (
-                  <>
-                    <Fingerprint className="w-6 h-6" />
-                    <span>Connect Internet Identity</span>
-                  </>
-                )}
+            {/* Error Display */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
+              >
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="w-5 h-5 text-red-400" />
+                  <span className="text-red-400 font-medium">{error}</span>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Custom ConnectWallet Container */}
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-400 rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-500"></div>
+              <div className="relative bg-white/5 backdrop-blur-md border border-white/20 rounded-2xl p-1 hover:bg-white/10 transition-all duration-300">
+                <div className="bg-gradient-to-r from-emerald-500 via-cyan-500 to-purple-500 rounded-xl p-1">
+                  <div className="bg-slate-900 rounded-lg p-2">
+                    <ConnectWallet />
+                  </div>
+                </div>
               </div>
-              
-              <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-400 rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-500 -z-10"></div>
-            </button>
+            </div>
             
             <p className="text-sm text-gray-400 mt-4 font-mono">
               Secure • Decentralized • Privacy-First
             </p>
+            
+            {/* Development Note */}
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-blue-400 text-xs font-mono">
+                🔧 NFID Integration: Package installed, API integration in progress
+              </p>
+            </div>
           </motion.div>
 
           {/* Features Grid */}
@@ -199,7 +206,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onIdentityConnect }) => {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 1 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
             {features.map((feature, index) => (
               <motion.div

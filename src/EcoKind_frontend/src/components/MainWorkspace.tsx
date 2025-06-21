@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Send, MessageSquare, Edit, Trash2, Shield, Brain, BarChart3, Sparkles, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Send, MessageSquare, Edit, Trash2, Shield, Brain, BarChart3, Sparkles, AlertCircle, CheckCircle, XCircle, User, Play, Loader2, Hash, MessageCircle } from 'lucide-react';
 import { Project } from '../types';
 import ChatFunctionForm from './ChatFunctionForm';
 import ResultDisplay from './ResultDisplay';
@@ -26,7 +26,9 @@ interface ToxicityDetectionActor {
   clearMessages: () => Promise<boolean>;
   harassmentLevel: (content: string) => Promise<string>;
   suggestImprovedMessage: (content: string) => Promise<string>;
-  generateKey: (devPrincipal: any, project: string) => Promise<string | null>;
+  generateKey: (devPrincipal: Principal, project: string) => Promise<string | null>;
+  verifyKey: (devPrincipal: Principal, project: string, key: string) => Promise<boolean>;
+  getDeveloperKeys: (devPrincipal: Principal) => Promise<[string, string][]>;
 }
 
 interface MainWorkspaceProps {
@@ -41,15 +43,64 @@ const MainWorkspace: React.FC<MainWorkspaceProps> = ({
   project,
   principalId,
   onBack,
-  canisterId,
-  actor
+  canisterId: propCanisterId,
+  actor: propActor
 }) => {
   const [activeFunction, setActiveFunction] = useState<string>('send-message');
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'testing'>('disconnected');
+  const [actor, setActor] = useState<ToxicityDetectionActor | null>(null);
+  const [canisterId, setCanisterId] = useState<string>('');
 
-  const [delMes1, setDelMes1] = useState<string>('');
+  // State for message operations
+  const [senderId, setSenderId] = useState<string>('');
+  const [receiverId, setReceiverId] = useState<string>('');
+  const [messageContent, setMessageContent] = useState<string>('');
+  const [messageIndex, setMessageIndex] = useState<string>('');
+  const [newMessageContent, setNewMessageContent] = useState<string>('');
+  const [deleteMessageAddress, setDeleteMessageAddress] = useState<string>('');
+  const [harassmentText, setHarassmentText] = useState<string>('');
+  const [improvementText, setImprovementText] = useState<string>('');
+
+  // State for VetKey operations
+  const [vetKeyProject, setVetKeyProject] = useState<string>('');
+  const [generatedVetKey, setGeneratedVetKey] = useState<string>('');
+  const [vetKeyToVerify, setVetKeyToVerify] = useState<string>('');
+  const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
+  const [developerKeys, setDeveloperKeys] = useState<[string, string][]>([]);
+
+  // Initialize actor on component mount
+  React.useEffect(() => {
+    const initializeActor = async () => {
+      try {
+        const host = 'https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io';
+        const canisterIdValue = propCanisterId || 'xgktx-viaaa-aaaab-qadda-cai'; // Use prop or default
+        
+        setCanisterId(canisterIdValue);
+        
+        const agent = new HttpAgent({ host });
+        const newActor = Actor.createActor(idlFactory, {
+          agent,
+          canisterId: canisterIdValue
+        }) as ToxicityDetectionActor;
+        
+        setActor(newActor);
+        console.log('✅ Actor initialized successfully');
+      } catch (error) {
+        console.error('❌ Failed to initialize actor:', error);
+        setActor(null);
+      }
+    };
+
+    // If actor is passed as prop, use it; otherwise create new one
+    if (propActor) {
+      setActor(propActor);
+      setCanisterId(propCanisterId || '');
+    } else {
+      initializeActor();
+    }
+  }, [propActor, propCanisterId]);
 
   // Test connection to backend
   const testConnection = async () => {
@@ -74,45 +125,273 @@ const MainWorkspace: React.FC<MainWorkspaceProps> = ({
     testConnection();
   }, [actor]);
 
-  React.useEffect(() => {
-    console.log('Hello');
-    const host = 'https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io';
-    const canisterId = 'xgktx-viaaa-aaaab-qadda-cai'; 
-
-    const agent = new HttpAgent({ host });
-    const actor = Actor.createActor(idlFactory,{
-      agent, canisterId
+  // Test function for delete message using state variables
+  const testDeleteMessage = async () => {
+    if (!actor) {
+      console.error('Actor not initialized');
+      return;
     }
-    )
 
-const testFunction = async () => {
-    const principal_one = 'elsnu-exgt6-a6c4w-zvlfc-3oqrj-5ifj3-adiil-cagsu-sdtml-yeed7-mae';
-    const principal_two = 'xraya-wv56e-7ddrm-fwhih-wx6er-3tiru-agv3f-efbkp-uwqbn-od643-rae';
-    const message = 'You are very bad!'; 
-    
-    const result = await actor.sendMessage(
-      principal_one,
-      principal_two,
-      message
-    );
-    
-    console.log('Message sent result:', result);
+    if (!deleteMessageAddress.trim()) {
+      console.log('Please enter a sender address to delete messages');
+      return;
+    }
 
-  }
-    testFunction();
+    try {
+      console.log('🗑️ Testing delete message for:', deleteMessageAddress);
+      const result = await actor.deleteUserMessages(deleteMessageAddress);
+      console.log('Delete message result:', result);
+      
+      // Add result to the results array
+      const timestamp = new Date();
+      const deleteResult = {
+        id: Date.now().toString(),
+        function: 'delete-message',
+        params: { senderAddress: deleteMessageAddress },
+        result: {
+          success: result,
+          deletedUser: deleteMessageAddress,
+          message: result
+            ? `🗑️ All messages from user ${deleteMessageAddress} have been permanently deleted.`
+            : `❌ Failed to delete messages from ${deleteMessageAddress}.`
+        },
+        timestamp
+      };
+      
+      setResults(prev => [deleteResult, ...prev]);
+    } catch (error) {
+      console.error('❌ Delete message test failed:', error);
+    }
+  };
 
-    const testFunction2 = async () => {
-    const message = 'elsnu-exgt6-a6c4w-zvlfc-3oqrj-5ifj3-adiil-cagsu-sdtml-yeed7-mae';
-    
-    const result = await actor.deleteUserMessages(
-      message,
-    );
-    
-    console.log('Message sent result:', result);
+  // Test function for sending messages using state variables
+  const testSendMessage = async () => {
+    if (!actor) {
+      console.error('Actor not initialized');
+      return;
+    }
 
-  }
-    testFunction2();
-  }, []);
+    if (!senderId.trim() || !receiverId.trim() || !messageContent.trim()) {
+      console.log('Please fill in sender, receiver, and message content');
+      return;
+    }
+
+    try {
+      console.log('🚀 Testing send message:', { senderId, receiverId, messageContent });
+      const result = await actor.sendMessage(senderId, receiverId, messageContent);
+      console.log('Send message result:', result);
+      
+      // Add result to the results array
+      const timestamp = new Date();
+      const sendResult = {
+        id: Date.now().toString(),
+        function: 'send-message',
+        params: { senderAddress: senderId, receiverAddress: receiverId, message: messageContent },
+        result: {
+          success: result,
+          messageId: result ? `msg_${Date.now()}` : null,
+          blocked: !result,
+          message: result
+            ? '✅ Message sent successfully! AI toxicity check passed.'
+            : '🚫 Message blocked! AI detected harassment or toxicity.',
+          status: result ? 'sent' : 'blocked',
+          aiProcessed: true
+        },
+        timestamp
+      };
+      
+      setResults(prev => [sendResult, ...prev]);
+    } catch (error) {
+      console.error('❌ Send message test failed:', error);
+    }
+  };
+
+  // Test function for generating VetKey using state variables
+  const testGenerateVetKey = async () => {
+    if (!actor) {
+      console.error('Actor not initialized');
+      return;
+    }
+
+    if (!vetKeyProject.trim()) {
+      console.log('Please enter a project name for VetKey generation');
+      return;
+    }
+
+    try {
+      console.log('🔑 Testing VetKey generation for project:', vetKeyProject);
+      
+      // Convert string principal ID to Principal object
+      const principalObj = Principal.fromText(principalId);
+      console.log('✅ Converted principal ID to Principal object:', principalObj.toText());
+      
+      const result = await actor.generateKey(principalObj, vetKeyProject);
+      console.log('VetKey generation result:', result);
+      
+      if (result) {
+        setGeneratedVetKey(result);
+      }
+      
+      // Add result to the results array
+      const timestamp = new Date();
+      const vetKeyResult = {
+        id: Date.now().toString(),
+        function: 'generate-vetkey',
+        params: { project: vetKeyProject },
+        result: {
+          success: result !== null,
+          vetKey: result || 'No key generated',
+          project: vetKeyProject,
+          message: result !== null
+            ? `🔑 VetKey generated successfully for project: ${vetKeyProject}`
+            : '❌ Failed to generate VetKey. Project may already have a key or limit reached.'
+        },
+        timestamp
+      };
+      
+      setResults(prev => [vetKeyResult, ...prev]);
+    } catch (error) {
+      console.error('❌ VetKey generation test failed:', error);
+      
+      // Add error result to the results array
+      const errorResult = {
+        id: Date.now().toString(),
+        function: 'generate-vetkey',
+        params: { project: vetKeyProject },
+        result: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          message: `❌ VetKey generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        },
+        timestamp: new Date(),
+        isError: true
+      };
+      
+      setResults(prev => [errorResult, ...prev]);
+    }
+  };
+
+  // Test function for verifying VetKey using state variables
+  const testVerifyVetKey = async () => {
+    if (!actor) {
+      console.error('Actor not initialized');
+      return;
+    }
+
+    if (!vetKeyProject.trim() || !vetKeyToVerify.trim()) {
+      console.log('Please enter both project name and VetKey to verify');
+      return;
+    }
+
+    try {
+      console.log('✅ Testing VetKey verification:', { project: vetKeyProject, key: vetKeyToVerify });
+      
+      // Convert string principal ID to Principal object
+      const principalObj = Principal.fromText(principalId);
+      console.log('✅ Converted principal ID to Principal object:', principalObj.toText());
+      
+      const result = await actor.verifyKey(principalObj, vetKeyProject, vetKeyToVerify);
+      console.log('VetKey verification result:', result);
+      
+      setVerificationResult(result);
+      
+      // Add result to the results array
+      const timestamp = new Date();
+      const verifyResult = {
+        id: Date.now().toString(),
+        function: 'verify-vetkey',
+        params: { project: vetKeyProject, key: vetKeyToVerify },
+        result: {
+          success: result,
+          vetKey: vetKeyToVerify,
+          project: vetKeyProject,
+          isValid: result,
+          message: result
+            ? `✅ VetKey verification successful for project: ${vetKeyProject}`
+            : '❌ VetKey verification failed. Invalid key or project.'
+        },
+        timestamp
+      };
+      
+      setResults(prev => [verifyResult, ...prev]);
+    } catch (error) {
+      console.error('❌ VetKey verification test failed:', error);
+      
+      // Add error result to the results array
+      const errorResult = {
+        id: Date.now().toString(),
+        function: 'verify-vetkey',
+        params: { project: vetKeyProject, key: vetKeyToVerify },
+        result: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          message: `❌ VetKey verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        },
+        timestamp: new Date(),
+        isError: true
+      };
+      
+      setResults(prev => [errorResult, ...prev]);
+    }
+  };
+
+  // Test function for getting developer keys using state variables
+  const testGetDeveloperKeys = async () => {
+    if (!actor) {
+      console.error('Actor not initialized');
+      return;
+    }
+
+    try {
+      console.log('🔍 Testing get developer keys...');
+      
+      // Convert string principal ID to Principal object
+      const principalObj = Principal.fromText(principalId);
+      console.log('✅ Converted principal ID to Principal object:', principalObj.toText());
+      
+      const result = await actor.getDeveloperKeys(principalObj);
+      console.log('Get developer keys result:', result);
+      
+      setDeveloperKeys(result);
+      
+      // Add result to the results array
+      const timestamp = new Date();
+      const keysResult = {
+        id: Date.now().toString(),
+        function: 'get-developer-keys',
+        params: {},
+        result: {
+          success: result.length > 0,
+          developerKeys: result.map(([project, key]) => ({ project, key })),
+          totalKeys: result.length,
+          message: result.length > 0
+            ? `🔍 Retrieved ${result.length} developer keys.`
+            : '❌ No developer keys found for this developer.'
+        },
+        timestamp
+      };
+      
+      setResults(prev => [keysResult, ...prev]);
+    } catch (error) {
+      console.error('❌ Get developer keys test failed:', error);
+      
+      // Add error result to the results array
+      const errorResult = {
+        id: Date.now().toString(),
+        function: 'get-developer-keys',
+        params: {},
+        result: {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          message: `❌ Get developer keys failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        },
+        timestamp: new Date(),
+        isError: true
+      };
+      
+      setResults(prev => [errorResult, ...prev]);
+    }
+  };
 
   const functions = [
     {
@@ -177,6 +456,33 @@ const testFunction = async () => {
       params: ['text'],
       color: 'from-pink-500 to-rose-500',
       endpoint: 'suggestImprovedMessage'
+    },
+    {
+      id: 'generate-vetkey',
+      name: 'Generate VetKey',
+      icon: <Shield className="w-5 h-5" />,
+      description: 'Generate a new VetKey for a specific project',
+      params: ['project'],
+      color: 'from-green-500 to-emerald-500',
+      endpoint: 'generateKey'
+    },
+    {
+      id: 'verify-vetkey',
+      name: 'Verify VetKey',
+      icon: <CheckCircle className="w-5 h-5" />,
+      description: 'Verify if a VetKey is valid for a specific project',
+      params: ['project', 'key'],
+      color: 'from-indigo-500 to-blue-500',
+      endpoint: 'verifyKey'
+    },
+    {
+      id: 'get-developer-keys',
+      name: 'Get Developer Keys',
+      icon: <BarChart3 className="w-5 h-5" />,
+      description: 'Retrieve all VetKeys for the current developer',
+      params: [],
+      color: 'from-violet-500 to-purple-500',
+      endpoint: 'getDeveloperKeys'
     }
   ];
 
@@ -367,6 +673,82 @@ const testFunction = async () => {
           };
           break;
 
+        case 'generate-vetkey':
+          console.log('🔑 Calling generateKey for VetKey generation...');
+          
+          // Convert string principal ID to Principal object
+          const generatePrincipalObj = Principal.fromText(principalId);
+          console.log('✅ Converted principal ID to Principal object:', generatePrincipalObj.toText());
+          
+          const vetKeyResult = await actor.generateKey(generatePrincipalObj, params.project);
+
+          result = {
+            id: Date.now().toString(),
+            function: functionId,
+            params,
+            result: {
+              success: vetKeyResult !== null,
+              vetKey: vetKeyResult || 'No key generated',
+              project: params.project,
+              message: vetKeyResult !== null
+                ? `🔑 VetKey generated successfully for project: ${params.project}`
+                : '❌ Failed to generate VetKey. Project may already have a key or limit reached.'
+            },
+            timestamp
+          };
+          break;
+
+        case 'verify-vetkey':
+          console.log('✅ Calling verifyKey for VetKey verification...');
+          
+          // Convert string principal ID to Principal object
+          const verifyPrincipalObj = Principal.fromText(principalId);
+          console.log('✅ Converted principal ID to Principal object:', verifyPrincipalObj.toText());
+          
+          const verifyResult = await actor.verifyKey(verifyPrincipalObj, params.project, params.key);
+
+          result = {
+            id: Date.now().toString(),
+            function: functionId,
+            params,
+            result: {
+              success: verifyResult,
+              vetKey: params.key,
+              project: params.project,
+              isValid: verifyResult,
+              message: verifyResult
+                ? `✅ VetKey verification successful for project: ${params.project}`
+                : '❌ VetKey verification failed. Invalid key or project.'
+            },
+            timestamp
+          };
+          break;
+
+        case 'get-developer-keys':
+          console.log('🔍 Calling getDeveloperKeys for developer keys retrieval...');
+          
+          // Convert string principal ID to Principal object
+          const keysPrincipalObj = Principal.fromText(principalId);
+          console.log('✅ Converted principal ID to Principal object:', keysPrincipalObj.toText());
+          
+          const keysResult = await actor.getDeveloperKeys(keysPrincipalObj);
+
+          result = {
+            id: Date.now().toString(),
+            function: functionId,
+            params,
+            result: {
+              success: keysResult.length > 0,
+              developerKeys: keysResult.map(([project, key]) => ({ project, key })),
+              totalKeys: keysResult.length,
+              message: keysResult.length > 0
+                ? `🔍 Retrieved ${keysResult.length} developer keys.`
+                : '❌ No developer keys found for this developer.'
+            },
+            timestamp
+          };
+          break;
+
         default:
           throw new Error(`❌ Unknown function: ${functionId}`);
       }
@@ -423,6 +805,644 @@ const testFunction = async () => {
     if (isTesting) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
     if (isConnected) return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
     return 'bg-red-500/20 text-red-400 border-red-500/30';
+  };
+
+  // Custom form component for different message operations
+  const renderCustomForm = () => {
+    switch (activeFunction) {
+      case 'send-message':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('send-message', {
+              senderAddress: senderId,
+              receiverAddress: receiverId,
+              message: messageContent
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <User className="w-4 h-4" />
+                <span>Sender Address</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={senderId}
+                onChange={(e) => setSenderId(e.target.value)}
+                placeholder="Enter sender's principal ID (e.g., rdmx6-jaaaa-aaaah-qcaiq-cai)"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <User className="w-4 h-4" />
+                <span>Receiver Address</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={receiverId}
+                onChange={(e) => setReceiverId(e.target.value)}
+                placeholder="Enter receiver's principal ID (e.g., rdmx6-jaaaa-aaaah-qcaiq-cai)"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <MessageCircle className="w-4 h-4" />
+                <span>Message</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={messageContent}
+                onChange={(e) => setMessageContent(e.target.value)}
+                placeholder="Type your message here..."
+                rows={4}
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !senderId.trim() || !receiverId.trim() || !messageContent.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Processing with AI...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5" />
+                    <span>Send Message</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+
+            {/* Test button to demonstrate state usage */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={testSendMessage}
+              disabled={!isConnected || !senderId.trim() || !receiverId.trim() || !messageContent.trim()}
+              className="w-full px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                <Sparkles className="w-5 h-5" />
+                <span>Test Send (Using State)</span>
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'receive-message':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('receive-message', {
+              receiverAddress: receiverId
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <User className="w-4 h-4" />
+                <span>Receiver Address</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={receiverId}
+                onChange={(e) => setReceiverId(e.target.value)}
+                placeholder="Enter receiver's principal ID (e.g., rdmx6-jaaaa-aaaah-qcaiq-cai)"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !receiverId.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Retrieving Messages...</span>
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="w-5 h-5" />
+                    <span>Receive Messages</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'edit-message':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('edit-message', {
+              senderAddress: senderId,
+              messageIndex: messageIndex,
+              newMessage: newMessageContent
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <User className="w-4 h-4" />
+                <span>Sender Address</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={senderId}
+                onChange={(e) => setSenderId(e.target.value)}
+                placeholder="Enter sender's principal ID"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <Hash className="w-4 h-4" />
+                <span>Message Index</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="number"
+                value={messageIndex}
+                onChange={(e) => setMessageIndex(e.target.value)}
+                placeholder="Message index (starts from 0)"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <MessageCircle className="w-4 h-4" />
+                <span>New Message</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={newMessageContent}
+                onChange={(e) => setNewMessageContent(e.target.value)}
+                placeholder="Enter the edited message content"
+                rows={4}
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !senderId.trim() || !messageIndex.trim() || !newMessageContent.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-yellow-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Editing Message...</span>
+                  </>
+                ) : (
+                  <>
+                    <Edit className="w-5 h-5" />
+                    <span>Edit Message</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'delete-message':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('delete-message', {
+              senderAddress: deleteMessageAddress
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <User className="w-4 h-4" />
+                <span>Sender Address</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={deleteMessageAddress}
+                onChange={(e) => setDeleteMessageAddress(e.target.value)}
+                placeholder="Enter sender's principal ID to delete all their messages"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !deleteMessageAddress.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-red-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Deleting Messages...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-5 h-5" />
+                    <span>Delete User Messages</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+
+            {/* Test button to demonstrate state usage */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={testDeleteMessage}
+              disabled={!isConnected || !deleteMessageAddress.trim()}
+              className="w-full px-8 py-3 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-orange-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                <Sparkles className="w-5 h-5" />
+                <span>Test Delete (Using State)</span>
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'clear-messages':
+        return (
+          <div className="space-y-6">
+            <div className="text-center py-8">
+              <div className="w-12 h-12 mx-auto mb-4 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                <Shield className="w-6 h-6 text-purple-400" />
+              </div>
+              <p className="text-gray-400 mb-6">This will clear all messages from the system. This action cannot be undone.</p>
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleFunctionSubmit('clear-messages', {})}
+              disabled={isLoading || !isConnected}
+              className="w-full px-8 py-4 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-purple-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Clearing Messages...</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-5 h-5" />
+                    <span>Clear All Messages</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+          </div>
+        );
+
+      case 'harassment-level':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('harassment-level', {
+              text: harassmentText
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <MessageCircle className="w-4 h-4" />
+                <span>Text to Analyze</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={harassmentText}
+                onChange={(e) => setHarassmentText(e.target.value)}
+                placeholder="Enter text to analyze for toxicity..."
+                rows={4}
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !harassmentText.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-cyan-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Analyzing with AI...</span>
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="w-5 h-5" />
+                    <span>Analyze Harassment</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'suggest-improvement':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('suggest-improvement', {
+              text: improvementText
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <MessageCircle className="w-4 h-4" />
+                <span>Text to Improve</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={improvementText}
+                onChange={(e) => setImprovementText(e.target.value)}
+                placeholder="Enter text to get AI-powered improvement suggestions..."
+                rows={4}
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !improvementText.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-pink-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Generating Suggestions...</span>
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-5 h-5" />
+                    <span>Get AI Improvement</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'generate-vetkey':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('generate-vetkey', {
+              project: vetKeyProject
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <Shield className="w-4 h-4" />
+                <span>Project Name</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={vetKeyProject}
+                onChange={(e) => setVetKeyProject(e.target.value)}
+                placeholder="Enter project name for VetKey generation"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !vetKeyProject.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-green-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Generating VetKey...</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-5 h-5" />
+                    <span>Generate VetKey</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+
+            {/* Test button to demonstrate state usage */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={testGenerateVetKey}
+              disabled={!isConnected || !vetKeyProject.trim()}
+              className="w-full px-8 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-teal-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                <Sparkles className="w-5 h-5" />
+                <span>Test Generate (Using State)</span>
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'verify-vetkey':
+        return (
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleFunctionSubmit('verify-vetkey', {
+              project: vetKeyProject,
+              key: vetKeyToVerify
+            });
+          }} className="space-y-6">
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <Shield className="w-4 h-4" />
+                <span>Project Name</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={vetKeyProject}
+                onChange={(e) => setVetKeyProject(e.target.value)}
+                placeholder="Enter project name to verify VetKey"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-300">
+                <CheckCircle className="w-4 h-4" />
+                <span>VetKey to Verify</span>
+                <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={vetKeyToVerify}
+                onChange={(e) => setVetKeyToVerify(e.target.value)}
+                placeholder="Enter VetKey to verify"
+                disabled={!isConnected}
+                className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                required
+              />
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading || !isConnected || !vetKeyProject.trim() || !vetKeyToVerify.trim()}
+              className="w-full px-8 py-4 bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-indigo-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Verifying VetKey...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Verify VetKey</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+
+            {/* Test button to demonstrate state usage */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={testVerifyVetKey}
+              disabled={!isConnected || !vetKeyProject.trim() || !vetKeyToVerify.trim()}
+              className="w-full px-8 py-3 bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                <Sparkles className="w-5 h-5" />
+                <span>Test Verify (Using State)</span>
+              </div>
+            </motion.button>
+          </form>
+        );
+
+      case 'get-developer-keys':
+        return (
+          <div className="space-y-6">
+            <div className="text-center py-8">
+              <div className="w-12 h-12 mx-auto mb-4 bg-violet-500/20 rounded-xl flex items-center justify-center">
+                <BarChart3 className="w-6 h-6 text-violet-400" />
+              </div>
+              <p className="text-gray-400 mb-6">This will retrieve all VetKeys associated with the current developer.</p>
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleFunctionSubmit('get-developer-keys', {})}
+              disabled={isLoading || !isConnected}
+              className="w-full px-8 py-4 bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-violet-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Retrieving Keys...</span>
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="w-5 h-5" />
+                    <span>Get Developer Keys</span>
+                  </>
+                )}
+              </div>
+            </motion.button>
+
+            {/* Test button to demonstrate state usage */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={testGetDeveloperKeys}
+              disabled={!isConnected}
+              className="w-full px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-purple-500/25"
+            >
+              <div className="flex items-center justify-center space-x-3">
+                <Sparkles className="w-5 h-5" />
+                <span>Test Get Keys (Using State)</span>
+              </div>
+            </motion.button>
+          </div>
+        );
+
+      default:
+        return <ChatFunctionForm
+          functionId={activeFunction}
+          parameters={functions.find(f => f.id === activeFunction)?.params || []}
+          onSubmit={handleFunctionSubmit}
+          isLoading={isLoading}
+          disabled={!isConnected}
+        />;
+    }
   };
 
   return (
@@ -546,13 +1566,7 @@ const testFunction = async () => {
                   </div>
                 )}
               </div>
-              <ChatFunctionForm
-                functionId={activeFunction}
-                parameters={functions.find(f => f.id === activeFunction)?.params || []}
-                onSubmit={handleFunctionSubmit}
-                isLoading={isLoading}
-                disabled={!isConnected}
-              />
+              {renderCustomForm()}
             </div>
 
             {/* Results */}

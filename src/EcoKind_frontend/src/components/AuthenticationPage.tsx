@@ -1,70 +1,110 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Key, ArrowLeft, CheckCircle, AlertCircle, Zap, Lock, Sparkles } from 'lucide-react';
+import { Shield, Key, ArrowLeft, CheckCircle, AlertCircle, Zap, Lock, Sparkles, Play } from 'lucide-react';
 import { Project } from '../types';
+import { Actor, HttpAgent } from '@dfinity/agent';
+import { Principal } from '@dfinity/principal';
+import { idlFactory } from '../utils/canister.idl';
+
+// Interface for your actor (Motoko backend)
+interface ToxicityDetectionActor {
+  sendMessage: (sender: string, receiver: string, content: string) => Promise<boolean>;
+  receiveMessages: (userPrincipal: string) => Promise<any[]>;
+  editMessage: (address: string, index: number, newContent: string) => Promise<boolean>;
+  deleteUserMessages: (address: string) => Promise<boolean>;
+  clearMessages: () => Promise<boolean>;
+  harassmentLevel: (content: string) => Promise<string>;
+  suggestImprovedMessage: (content: string) => Promise<string>;
+  generateKey: (devPrincipal: Principal, project: string) => Promise<string | null>;
+  verifyKey: (devPrincipal: Principal, project: string, key: string) => Promise<boolean>;
+  getDeveloperKeys: (devPrincipal: Principal) => Promise<[string, string][]>;
+}
 
 interface AuthenticationPageProps {
   project: Project;
   onAuthenticate: (key: string) => void;
   onBack: () => void;
+  principalId?: string;
 }
 
 const AuthenticationPage: React.FC<AuthenticationPageProps> = ({
   project,
   onAuthenticate,
-  onBack
+  onBack,
+  principalId = 'rdmx6-jaaaa-aaaah-qcaiq-cai'
 }) => {
-  const [authKey, setAuthKey] = useState('');
   const [generatedKey, setGeneratedKey] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState('');
+  const [actor, setActor] = useState<ToxicityDetectionActor | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
-  // ========================================
-  // BACKEND INTEGRATION POINT #5
-  // Replace with actual VetKey integration
-  // ========================================
+  // Initialize actor on component mount
+  useEffect(() => {
+    const initializeActor = async () => {
+      try {
+        const host = 'https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io';
+        const canisterId = 'xgktx-viaaa-aaaab-qadda-cai';
+        
+        const agent = new HttpAgent({ host });
+        const newActor = Actor.createActor(idlFactory, {
+          agent,
+          canisterId
+        }) as ToxicityDetectionActor;
+        
+        setActor(newActor);
+        setIsConnected(true);
+        console.log('✅ Actor initialized successfully in AuthenticationPage');
+      } catch (error) {
+        console.error('❌ Failed to initialize actor in AuthenticationPage:', error);
+        setActor(null);
+        setIsConnected(false);
+      }
+    };
+
+    initializeActor();
+  }, []);
+
+  // Generate VetKey using backend function
   const generateAuthKey = async () => {
+    if (!actor || !isConnected) {
+      setError('Backend connection not available. Please try again.');
+      return;
+    }
+
     setIsGenerating(true);
     setError('');
     
     try {
-      // TODO: Replace with actual VetKey integration
-      // const vetKeyResponse = await fetch('/api/vetkey/generate', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ projectId: project.id })
-      // });
-      // const { authKey } = await vetKeyResponse.json();
+      console.log('🔑 Generating VetKey for project:', project.name);
       
-      // Mock implementation - replace this
-      setTimeout(() => {
-        const mockKey = project.authKey;
-        setGeneratedKey(mockKey);
+      // Convert string principal ID to Principal object
+      const principalObj = Principal.fromText(principalId);
+      console.log('✅ Converted principal ID to Principal object:', principalObj.toText());
+      
+      const vetKeyResult = await actor.generateKey(principalObj, project.name);
+      
+      if (vetKeyResult) {
+        setGeneratedKey(vetKeyResult);
         setShowKey(true);
-        setIsGenerating(false);
-      }, 2500);
-      
+        console.log('✅ VetKey generated successfully:', vetKeyResult);
+      } else {
+        setError('Failed to generate VetKey. Project may already have a key or limit reached.');
+        console.log('❌ VetKey generation failed - no key returned');
+      }
     } catch (error) {
-      console.error('VetKey generation failed:', error);
-      setError('Failed to generate authentication key. Please try again.');
+      console.error('❌ VetKey generation failed:', error);
+      setError(`Failed to generate authentication key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleAuthenticate = async () => {
-    try {
-      // TODO: Add actual VetKey validation
-      // const isValid = await validateVetKey(project.id, authKey.trim());
-      
-      if (authKey.trim() === generatedKey) {
-        onAuthenticate(authKey.trim());
-      } else {
-        setError('Invalid authentication key. Please verify and try again.');
-      }
-    } catch (error) {
-      console.error('Authentication failed:', error);
-      setError('Authentication failed. Please try again.');
+  // Proceed directly to workspace with generated key
+  const handleProceedToWorkspace = () => {
+    if (generatedKey) {
+      onAuthenticate(generatedKey);
     }
   };
 
@@ -118,9 +158,17 @@ const AuthenticationPage: React.FC<AuthenticationPageProps> = ({
               Advanced cryptographic authentication system built on the Internet Computer Protocol, 
               ensuring maximum security for your project access.
             </p>
+            
+            {/* Connection Status */}
+            <div className="mt-4 flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-400'}`}></div>
+              <span className={`text-sm font-medium ${isConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+                {isConnected ? 'Backend Connected' : 'Backend Disconnected'}
+              </span>
+            </div>
           </div>
 
-          {/* Step 1: Generate Key */}
+          {/* Generate Key */}
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
@@ -132,13 +180,18 @@ const AuthenticationPage: React.FC<AuthenticationPageProps> = ({
             {!showKey ? (
               <button
                 onClick={generateAuthKey}
-                disabled={isGenerating}
+                disabled={isGenerating || !isConnected}
                 className="w-full px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 shadow-lg hover:shadow-purple-500/25"
               >
                 {isGenerating ? (
                   <div className="flex items-center justify-center space-x-3">
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
                     <span>Generating Secure Key...</span>
+                  </div>
+                ) : !isConnected ? (
+                  <div className="flex items-center justify-center space-x-3">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>Backend Not Connected</span>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center space-x-3">
@@ -165,7 +218,7 @@ const AuthenticationPage: React.FC<AuthenticationPageProps> = ({
             )}
           </div>
 
-          {/* Step 2: Verify Key */}
+          {/* Proceed Button */}
           {showKey && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -176,43 +229,30 @@ const AuthenticationPage: React.FC<AuthenticationPageProps> = ({
                 <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
                   2
                 </div>
-                <h3 className="text-white font-bold text-lg">Verify Authentication Key</h3>
+                <h3 className="text-white font-bold text-lg">Proceed to Workspace</h3>
               </div>
               
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  value={authKey}
-                  onChange={(e) => {
-                    setAuthKey(e.target.value);
-                    setError('');
-                  }}
-                  placeholder="Paste the generated authentication key"
-                  className="w-full px-4 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-emerald-400 focus:bg-white/10 transition-all duration-200 font-mono"
-                />
-                
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center space-x-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3"
-                  >
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
-                
-                <button
-                  onClick={handleAuthenticate}
-                  disabled={!authKey.trim()}
-                  className="w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/25"
-                >
-                  <div className="flex items-center justify-center space-x-3">
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Authenticate & Continue</span>
-                  </div>
-                </button>
-              </div>
+              <button
+                onClick={handleProceedToWorkspace}
+                className="w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-emerald-500/25"
+              >
+                <div className="flex items-center justify-center space-x-3">
+                  <Play className="w-5 h-5" />
+                  <span>Enter Workspace</span>
+                </div>
+              </button>
+            </motion.div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center space-x-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3"
+            >
+              <AlertCircle className="w-4 h-4" />
+              <span>{error}</span>
             </motion.div>
           )}
 
