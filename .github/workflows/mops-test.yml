@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: dfinity/setup-dfx@v1
+      - uses: dfinity/setup-dfx@v0.2.1
         with:
           dfx-version: 0.17.0
       - uses: ZenVoich/setup-mops@v1
