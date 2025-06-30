@@ -13,12 +13,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: dfinity/setup-dfx@main
-        with:
-          dfx-version: 0.17.0
-      - uses: ZenVoich/setup-mops@v1
-        with:
-          mops-version: 1
+      
+      - name: Install DFX
+        run: |
+          sh -ci "$(curl -fsSL https://internetcomputer.org/install.sh)"
+          echo "$HOME/.dfx/bin" >> $GITHUB_PATH
+      
+      - name: Verify DFX installation
+        run: |
+          dfx --version
+          which dfx
+      
+      - name: Install mops
+        run: |
+          curl -fsSL https://mops.one/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Verify mops installation
+        run: |
+          mops --version
+          which mops
 
       - name: install mops packages
         run: mops install
