@@ -1,59 +1,103 @@
-# `EcoKind`
+# EcoKind
 
-Welcome to your new `EcoKind` project and to the Internet Computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.
+EcoKind is a decentralized, privacy-focused platform for safe and respectful online communication. Built on the Internet Computer (IC) using Motoko and React, EcoKind provides robust moderation tools, harassment detection, and a developer-friendly API for integrating content moderation into your own projects.
 
-To get started, you might want to explore the project directory structure and the default configuration file. Working with this project in your development environment will not affect any production deployment or identity tokens.
+## Features
 
-To learn more before you start working with `EcoKind`, see the following documentation available online:
+- **Decentralized Messaging:** Send and receive messages securely on the Internet Computer.
+- **Harassment Detection:** Uses LLMs to detect and block harassing or offensive content in real time.
+- **Severity Classification:** Classifies the severity of detected harassment (Low, Moderate, High).
+- **Message Improvement:** Suggests improved, non-offensive versions of flagged messages.
+- **API Key Management:** Developers can generate and manage API keys for their projects.
+- **Frontend Dashboard:** Modern React-based dashboard for users and developers.
+- **SDK for Integration:** Easily integrate EcoKind's moderation features into your own apps using the published npm package.
 
-- [Quick Start](https://internetcomputer.org/docs/current/developer-docs/setup/deploy-locally)
-- [SDK Developer Tools](https://internetcomputer.org/docs/current/developer-docs/setup/install)
-- [Motoko Programming Language Guide](https://internetcomputer.org/docs/current/motoko/main/motoko)
-- [Motoko Language Quick Reference](https://internetcomputer.org/docs/current/motoko/main/language-manual)
+## Live Demo
 
-If you want to start working on your project right away, you might want to try the following commands:
+Visit the live platform: [https://ecokind.xyz](https://ecokind.xyz)
+
+## NPM Package
+
+We provide an npm package for easy integration of EcoKind's moderation features into your own JavaScript/TypeScript projects.
+
+- **Package:** [ecokind-moderation-sdk](https://www.npmjs.com/package/ecokind-moderation-sdk)
+- **Install:**  
+  ```bash
+  npm install ecokind-moderation-sdk
+  ```
+- **Usage Example:**
+  ```js
+  import { moderateMessage } from 'ecokind-moderation-sdk';
+
+  const result = await moderateMessage("Your message here");
+  if (result.flagged) {
+    console.log("Message flagged:", result.reason);
+  }
+  ```
+
+## Project Structure
+
+- `src/EcoKind_backend/`: Motoko canister code (core logic, moderation, messaging, API keys)
+- `src/EcoKind_frontend/`: React frontend (dashboard, user interface)
+- `test/`: Motoko test files
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js >= 16
+- npm >= 7
+- [DFINITY SDK](https://smartcontracts.org/docs/quickstart/quickstart-intro.html)
+- [mops](https://mops.one/) (Motoko package manager)
+
+### Install Dependencies
 
 ```bash
-cd EcoKind/
-dfx help
-dfx canister --help
+npm install
+cd src/EcoKind_frontend
+npm install
 ```
 
-## Running the project locally
+### Local Development
 
-If you want to test your project locally, you can use the following commands:
+#### Start the Internet Computer Local Replica
 
 ```bash
-# Starts the replica, running in the background
 dfx start --background
+```
 
-# Deploys your canisters to the replica and generates your candid interface
+#### Deploy Canisters
+
+```bash
 dfx deploy
 ```
 
-Once the job completes, your application will be available at `http://localhost:4943?canisterId={asset_canister_id}`.
-
-If you have made changes to your backend canister, you can generate a new candid interface with
+#### Start the Frontend
 
 ```bash
-npm run generate
+cd src/EcoKind_frontend
+npm run dev
 ```
 
-at any time. This is recommended before starting the frontend development server, and will be run automatically any time you run `dfx deploy`.
+Visit `http://localhost:3000` in your browser.
 
-If you are making frontend changes, you can start a development server with
+### Running Tests
+
+#### Motoko Tests
 
 ```bash
-npm start
+cd EcoKind
+mops test
 ```
 
-Which will start a server at `http://localhost:8080`, proxying API requests to the replica at port 4943.
+#### Frontend Tests
 
-### Note on frontend environment variables
+If you add frontend tests, run them with your preferred framework (e.g., Jest, Vitest).
 
-If you are hosting frontend code somewhere without using DFX, you may need to make one of the following adjustments to ensure your project does not fetch the root key in production:
+## Contributing
 
-- set`DFX_NETWORK` to `ic` if you are using Webpack
-- use your own preferred method to replace `process.env.DFX_NETWORK` in the autogenerated declarations
-  - Setting `canisters -> {asset_canister_id} -> declarations -> env_override to a string` in `dfx.json` will replace `process.env.DFX_NETWORK` with the string in the autogenerated declarations
-- Write your own `createActor` constructor
+Contributions are welcome! Please open issues or pull requests on [GitHub](https://github.com/ushi86/EcoKind).
+
+## License
+
+MIT
